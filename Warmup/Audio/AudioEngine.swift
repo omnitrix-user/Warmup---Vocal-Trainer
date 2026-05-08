@@ -1,0 +1,62 @@
+import AVFoundation
+import Foundation
+
+final class AudioEngine: ObservableObject {
+    @Published var isPlaying: Bool = false
+
+    private let engine = AVAudioEngine()
+    private let playerNode = AVAudioPlayerNode()
+
+    init() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default)
+            try session.setActive(true)
+            print("[AudioEngine] Session configured")
+        } catch {
+            print("[AudioEngine] AVAudioSession setup failed: \(error.localizedDescription)")
+        }
+
+        setup()
+    }
+
+    private func setup() {
+        engine.attach(playerNode)
+        engine.connect(playerNode, to: engine.mainMixerNode, format: nil)
+        engine.prepare()
+
+        do {
+            try engine.start()
+            print("[AudioEngine] Engine started")
+        } catch {
+            print("[AudioEngine] Engine start failed: \(error.localizedDescription)")
+        }
+    }
+
+    func play(fileName: String, fileExtension: String = "m4a") {
+        guard let url = Bundle.main.url(forResource: fileName, withExtension: fileExtension) else {
+            print("[AudioEngine] ERROR: Could not find file \(fileName).\(fileExtension) in app bundle")
+            return
+        }
+
+        do {
+            let file = try AVAudioFile(forReading: url)
+            print("[AudioEngine] Loaded file: \(fileName).\(fileExtension)")
+
+            playerNode.scheduleFile(file, at: nil, completionHandler: { [weak self] in
+                DispatchQueue.main.async {
+                    self?.isPlaying = false
+                    print("[AudioEngine] Playback finished")
+                }
+            })
+
+            playerNode.play()
+            DispatchQueue.main.async { [weak self] in
+                self?.isPlaying = true
+                print("[AudioEngine] Playback started")
+            }
+        } catch {
+            print("[AudioEngine] Playback scheduling failed: \(error.localizedDescription)")
+        }
+    }
+}
