@@ -1,10 +1,14 @@
 import Foundation
 import Combine
 import AVFoundation
-import AudioKit
-import SoundpipeAudioKit
 
-@MainActor
+/// Real-time vocal pitch detector.
+///
+/// Installs an input tap on the shared AudioEngine's mic input node and runs
+/// time-domain autocorrelation on incoming audio buffers to estimate the fundamental
+/// frequency. Designed for the human voice range (~80 Hz to ~1100 Hz).
+///
+/// All published properties are updated on the main thread.
 final class PitchDetector: ObservableObject {
     @Published private(set) var detectedFrequency: Double = 0
     @Published private(set) var detectedNote: String = "—"
@@ -12,81 +16,144 @@ final class PitchDetector: ObservableObject {
     @Published private(set) var isListening: Bool = false
     @Published private(set) var permissionDenied: Bool = false
 
-    // Use full module path to disambiguate from our project's AudioEngine class.
-    private let engine = AudioKit.AudioEngine()
-    private var pitchTap: PitchTap?
-    private var muteMixer: Mixer?
+    private let audioEngine: AudioEngine
+    private let bufferSize: AVAudioFrameCount = 2048
+    private let processingQueue = DispatchQueue(label: "com.warmup.pitchdetection", qos: .userInitiated)
 
-    init() {
-        configure()
-    }
+    // Voice fundamental frequency range (Hz) — used to bound the autocorrelation lag search.
+    private let minFrequency: Double = 80.0
+    private let maxFrequency: Double = 1100.0
 
-    private func configure() {
-        guard let input = engine.input else {
-            print("[PitchDetector] No mic input available")
-            return
-        }
+    // Amplitude floor. Below this RMS, treat as silence.
+    private let silenceFloor: Float = 0.01
 
-        // Mute output — we don't want to hear ourselves through the speaker.
-        let mixer = Mixer(input)
-        mixer.volume = 0
-        muteMixer = mixer
-        engine.output = mixer
-
-        pitchTap = PitchTap(input) { [weak self] pitch, amp in
-            let frequency = pitch.first.map { Double($0) } ?? 0
-            let amplitude = amp.first.map { Double($0) } ?? 0
-            DispatchQueue.main.async {
-                self?.handleDetection(frequency: frequency, amplitude: amplitude)
-            }
-        }
-        print("[PitchDetector] Configured")
+    init(audioEngine: AudioEngine) {
+        self.audioEngine = audioEngine
     }
 
     func start() async {
         let granted = await AVAudioApplication.requestRecordPermission()
+        await MainActor.run {
+            self.permissionDenied = !granted
+        }
         guard granted else {
-            permissionDenied = true
             print("[PitchDetector] ERROR: Microphone permission denied")
             return
         }
-        permissionDenied = false
 
-        do {
-            try engine.start()
-            pitchTap?.start()
-            isListening = true
-            print("[PitchDetector] Started listening")
-        } catch {
-            print("[PitchDetector] ERROR: Engine failed to start: \(error.localizedDescription)")
+        let inputNode = audioEngine.inputNode
+        let format = inputNode.outputFormat(forBus: 0)
+
+        // Defensive: remove any pre-existing tap (if previous start was never cleanly stopped).
+        inputNode.removeTap(onBus: 0)
+
+        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
+            guard let self else { return }
+            guard let channelData = buffer.floatChannelData else { return }
+            let frameCount = Int(buffer.frameLength)
+            guard frameCount > 0 else { return }
+
+            // Copy samples out of the audio buffer (which doesn't outlive this callback)
+            // and hop to a background queue for the heavy DSP work.
+            let samples = Array(UnsafeBufferPointer(start: channelData[0], count: frameCount))
+            let sampleRate = buffer.format.sampleRate
+
+            self.processingQueue.async { [weak self] in
+                self?.processSamples(samples, sampleRate: sampleRate)
+            }
         }
+
+        await MainActor.run {
+            self.isListening = true
+        }
+        print("[PitchDetector] Started listening (format: \(format.sampleRate) Hz, \(format.channelCount) ch)")
     }
 
     func stop() {
-        pitchTap?.stop()
-        engine.stop()
-        isListening = false
-        detectedFrequency = 0
-        amplitude = 0
-        detectedNote = "—"
+        guard isListening else { return }
+        audioEngine.inputNode.removeTap(onBus: 0)
+        DispatchQueue.main.async { [weak self] in
+            self?.isListening = false
+            self?.detectedFrequency = 0
+            self?.amplitude = 0
+            self?.detectedNote = "—"
+        }
         print("[PitchDetector] Stopped")
     }
 
-    private func handleDetection(frequency: Double, amplitude: Double) {
-        self.amplitude = amplitude
+    // MARK: - DSP
 
-        // Filter out silence and obvious noise.
-        guard amplitude > 0.05, frequency > 50 else {
-            self.detectedNote = "—"
-            self.detectedFrequency = 0
-            return
+    private func processSamples(_ samples: [Float], sampleRate: Double) {
+        let rms = Self.computeRMS(samples)
+        let frequency: Double
+
+        if rms < silenceFloor {
+            frequency = 0
+        } else {
+            frequency = Self.estimateFrequency(samples: samples,
+                                               sampleRate: sampleRate,
+                                               minFrequency: minFrequency,
+                                               maxFrequency: maxFrequency)
         }
 
-        self.detectedFrequency = frequency
-        self.detectedNote = Self.noteName(forFrequency: frequency)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.amplitude = Double(rms)
+
+            if frequency >= self.minFrequency && frequency <= self.maxFrequency {
+                self.detectedFrequency = frequency
+                self.detectedNote = Self.noteName(forFrequency: frequency)
+            } else {
+                self.detectedFrequency = 0
+                self.detectedNote = "—"
+            }
+        }
     }
 
-    /// Converts a frequency in Hz to a musical note name like "A4", "C#5".
+    /// RMS amplitude of a buffer. Used as a silence gate before running pitch detection.
+    private static func computeRMS(_ samples: [Float]) -> Float {
+        guard !samples.isEmpty else { return 0 }
+        var sumSquares: Float = 0
+        for sample in samples {
+            sumSquares += sample * sample
+        }
+        return sqrt(sumSquares / Float(samples.count))
+    }
+
+    /// Time-domain autocorrelation pitch estimator.
+    /// For each candidate lag in the voice frequency range, computes
+    /// the correlation between the signal and its lagged copy.
+    /// The lag with the maximum correlation corresponds to the fundamental period.
+    private static func estimateFrequency(samples: [Float],
+                                          sampleRate: Double,
+                                          minFrequency: Double,
+                                          maxFrequency: Double) -> Double {
+        let minLag = Int(sampleRate / maxFrequency)
+        let maxLag = Int(sampleRate / minFrequency)
+        guard samples.count > maxLag else { return 0 }
+
+        var bestLag = 0
+        var bestCorrelation: Float = 0
+
+        for lag in minLag...maxLag {
+            var correlation: Float = 0
+            let limit = samples.count - lag
+            var i = 0
+            while i < limit {
+                correlation += samples[i] * samples[i + lag]
+                i += 1
+            }
+            if correlation > bestCorrelation {
+                bestCorrelation = correlation
+                bestLag = lag
+            }
+        }
+
+        guard bestLag > 0, bestCorrelation > 0 else { return 0 }
+        return sampleRate / Double(bestLag)
+    }
+
+    /// Converts a frequency in Hz to a musical note name like "A4" or "C#5".
     static func noteName(forFrequency frequency: Double) -> String {
         guard frequency > 0 else { return "—" }
         let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]

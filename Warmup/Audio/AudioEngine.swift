@@ -8,6 +8,11 @@ final class AudioEngine: ObservableObject {
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
 
+    /// Exposes the underlying AVAudioEngine input node so PitchDetector can install a tap on it.
+    var inputNode: AVAudioInputNode {
+        engine.inputNode
+    }
+
     init() {
         do {
             let session = AVAudioSession.sharedInstance()
