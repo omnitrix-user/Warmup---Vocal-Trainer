@@ -15,7 +15,7 @@ final class PitchDetector: ObservableObject {
     // Use full module path to disambiguate from our project's AudioEngine class.
     private let engine = AudioKit.AudioEngine()
     private var pitchTap: PitchTap?
-    private var silenceFader: Fader?
+    private var muteMixer: Mixer?
 
     init() {
         configure()
@@ -28,9 +28,10 @@ final class PitchDetector: ObservableObject {
         }
 
         // Mute output — we don't want to hear ourselves through the speaker.
-        let fader = Fader(input, gain: 0)
-        silenceFader = fader
-        engine.output = fader
+        let mixer = Mixer(input)
+        mixer.volume = 0
+        muteMixer = mixer
+        engine.output = mixer
 
         pitchTap = PitchTap(input) { [weak self] pitch, amp in
             let frequency = pitch.first.map { Double($0) } ?? 0
