@@ -60,4 +60,40 @@ final class AudioEngine: ObservableObject {
             print("[AudioEngine] Playback scheduling failed: \(error.localizedDescription)")
         }
     }
+
+    func playAndWait(fileName: String, fileExtension: String) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            guard let url = Bundle.main.url(forResource: fileName, withExtension: fileExtension) else {
+                print("[AudioEngine] ERROR: Could not find file \(fileName).\(fileExtension) in app bundle")
+                continuation.resume()
+                return
+            }
+            do {
+                let file = try AVAudioFile(forReading: url)
+                playerNode.scheduleFile(file, at: nil) { [weak self] in
+                    DispatchQueue.main.async {
+                        self?.isPlaying = false
+                        print("[AudioEngine] playAndWait finished: \(fileName).\(fileExtension)")
+                        continuation.resume()
+                    }
+                }
+                DispatchQueue.main.async { [weak self] in
+                    self?.isPlaying = true
+                    print("[AudioEngine] playAndWait started: \(fileName).\(fileExtension)")
+                }
+                playerNode.play()
+            } catch {
+                print("[AudioEngine] ERROR: Failed to load \(fileName).\(fileExtension): \(error.localizedDescription)")
+                continuation.resume()
+            }
+        }
+    }
+
+    func stopPlayback() {
+        playerNode.stop()
+        DispatchQueue.main.async { [weak self] in
+            self?.isPlaying = false
+        }
+        print("[AudioEngine] Playback stopped")
+    }
 }
