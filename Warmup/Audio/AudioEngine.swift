@@ -11,7 +11,7 @@ final class AudioEngine: ObservableObject {
     init() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default)
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
             try session.setActive(true)
             print("[AudioEngine] Session configured")
         } catch {

@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		967068972FAFBA150006F9FA /* AudioKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9670688D2FAE1DBA0006F9FA /* AudioKit */; };
+		967068982FAFBA150006F9FA /* SoundpipeAudioKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9670688E2FAE1DBA0006F9FA /* SoundpipeAudioKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		9670686B2FAE1DBA0006F9FA /* Warmup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Warmup.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +28,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				967068982FAFBA150006F9FA /* SoundpipeAudioKit in Frameworks */,
+				967068972FAFBA150006F9FA /* AudioKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +72,8 @@
 			);
 			name = Warmup;
 			packageProductDependencies = (
+				9670688D2FAE1DBA0006F9FA /* AudioKit */,
+				9670688E2FAE1DBA0006F9FA /* SoundpipeAudioKit */,
 			);
 			productName = Warmup;
 			productReference = 9670686B2FAE1DBA0006F9FA /* Warmup.app */;
@@ -94,6 +103,10 @@
 			);
 			mainGroup = 967068622FAE1DBA0006F9FA;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9670688B2FAE1DBA0006F9FA /* XCRemoteSwiftPackageReference "AudioKit" */,
+				9670688C2FAE1DBA0006F9FA /* XCRemoteSwiftPackageReference "SoundpipeAudioKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9670686C2FAE1DBA0006F9FA /* Products */;
 			projectDirPath = "";
@@ -258,7 +271,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -290,7 +303,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -330,6 +343,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9670688B2FAE1DBA0006F9FA /* XCRemoteSwiftPackageReference "AudioKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AudioKit/AudioKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.6.0;
+			};
+		};
+		9670688C2FAE1DBA0006F9FA /* XCRemoteSwiftPackageReference "SoundpipeAudioKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AudioKit/SoundpipeAudioKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9670688D2FAE1DBA0006F9FA /* AudioKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9670688B2FAE1DBA0006F9FA /* XCRemoteSwiftPackageReference "AudioKit" */;
+			productName = AudioKit;
+		};
+		9670688E2FAE1DBA0006F9FA /* SoundpipeAudioKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9670688C2FAE1DBA0006F9FA /* XCRemoteSwiftPackageReference "SoundpipeAudioKit" */;
+			productName = SoundpipeAudioKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 967068632FAE1DBA0006F9FA /* Project object */;
 }

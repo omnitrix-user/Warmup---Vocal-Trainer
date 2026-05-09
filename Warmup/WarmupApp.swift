@@ -4,6 +4,7 @@ import SwiftUI
 struct WarmupApp: App {
     @StateObject private var audioEngine: AudioEngine
     @StateObject private var sessionPlayer: SessionPlayer
+    @StateObject private var pitchDetector = PitchDetector()
 
     init() {
         let engine = AudioEngine()
@@ -16,6 +17,7 @@ struct WarmupApp: App {
             ContentView()
                 .environmentObject(audioEngine)
                 .environmentObject(sessionPlayer)
+                .environmentObject(pitchDetector)
                 .preferredColorScheme(.dark)
         }
     }
