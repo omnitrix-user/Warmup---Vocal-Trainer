@@ -48,10 +48,11 @@ struct ActiveSessionView: View {
     private let maxHistory = 80
     private let visualizationHeight: CGFloat = 180
 
-    // Set to true to capture portfolio screenshots with synthetic curve data.
-    // Set back to false before shipping or live demos. The real YIN pipeline
-    // is unaffected — this only swaps the data feeding the display.
-    private static let demoCaptureMode: Bool = true
+    // Demo capture mode produces a deterministic, organic-looking pitch curve
+    // for portfolio screenshot reliability. The real YIN pitch pipeline
+    // (PitchDetector.estimatePitchYIN) runs unchanged when this is false.
+    // Production value is false.
+    private static let demoCaptureMode: Bool = false
 
     private var currentStep: SequenceStep? {
         guard let idx = sessionPlayer.currentStepIndex,

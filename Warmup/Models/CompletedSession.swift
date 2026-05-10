@@ -23,9 +23,9 @@ struct CompletedSession: Identifiable {
 }
 
 extension CompletedSession {
-    /// Hardcoded seed data. Generates ~27 sessions over the past ~30 days
-    /// with a current 12-day streak and a 15-day best streak (separated by gaps),
-    /// so the home screen reads as a month of realistic practice.
+    /// Hardcoded seed data for portfolio capture and demonstration.
+    /// In a production version, this would be replaced by SwiftData-persisted
+    /// CompletedSession records written when the user actually completes a routine.
     static let seedData: [CompletedSession] = {
         let cal = Calendar.current
         let now = Date()

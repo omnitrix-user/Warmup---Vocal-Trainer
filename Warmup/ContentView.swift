@@ -1,11 +1,9 @@
 import SwiftUI
 
 struct ContentView: View {
-    // SCREENSHOT MODE: set to true to ALWAYS show onboarding (for portfolio capture).
-    // Set to false for normal first-launch-only behavior driven by AppStorage.
-    // This is independent of the demoCaptureMode flag in ActiveSessionView — flip
-    // both for capture, both off for ship.
-    private static let forceShowOnboarding: Bool = true
+    // Set to true to force-show onboarding for screenshot capture (independent
+    // of the AppStorage first-launch flag). Production value is false.
+    private static let forceShowOnboarding: Bool = false
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
 
