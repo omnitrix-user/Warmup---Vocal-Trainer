@@ -188,26 +188,57 @@ struct ActiveSessionView: View {
             // Pitch curve — the user's recent trajectory
             guard !pitchHistory.isEmpty else { return }
 
-            var curvePath = Path()
-            var penDown = false
+            // First pass: collect voiced points into separate segments (gap-aware).
+            var segments: [[CGPoint]] = []
+            var currentSegment: [CGPoint] = []
 
             for (idx, snap) in pitchHistory.enumerated() {
                 let x = CGFloat(idx) * pointSpacing
-                // Negate so positive cents (sharp) goes UP visually
                 let clamped = max(-100, min(100, snap.centsOff))
                 let yOffset = -clamped / 100 * Double(size.height / 2 - 10)
                 let y = middleY + CGFloat(yOffset)
 
-                if !snap.isVoiced {
-                    penDown = false
+                if snap.isVoiced {
+                    currentSegment.append(CGPoint(x: x, y: y))
+                } else if !currentSegment.isEmpty {
+                    segments.append(currentSegment)
+                    currentSegment = []
+                }
+            }
+            if !currentSegment.isEmpty {
+                segments.append(currentSegment)
+            }
+
+            // Second pass: draw each segment with smooth quadratic Bezier curves through midpoints.
+            var curvePath = Path()
+            for points in segments {
+                guard let first = points.first else { continue }
+                curvePath.move(to: first)
+
+                if points.count == 1 {
+                    // Single point — nothing to curve, render a small dash so it's still visible.
+                    curvePath.addLine(to: CGPoint(x: first.x + 1, y: first.y))
                     continue
                 }
-                if !penDown {
-                    curvePath.move(to: CGPoint(x: x, y: y))
-                    penDown = true
-                } else {
-                    curvePath.addLine(to: CGPoint(x: x, y: y))
+                if points.count == 2 {
+                    curvePath.addLine(to: points[1])
+                    continue
                 }
+
+                // For 3+ points: draw quadratic curves to midpoints, using each point as the control.
+                // This passes the curve through midpoints with each pivot point smoothing the bend.
+                for i in 1..<(points.count - 1) {
+                    let prev = points[i - 1]
+                    let curr = points[i]
+                    let mid = CGPoint(x: (prev.x + curr.x) / 2 + (curr.x - prev.x) / 2,
+                                      y: (prev.y + curr.y) / 2 + (curr.y - prev.y) / 2)
+                    // Simpler form: midpoint between current and next
+                    let next = points[i + 1]
+                    let midToNext = CGPoint(x: (curr.x + next.x) / 2, y: (curr.y + next.y) / 2)
+                    curvePath.addQuadCurve(to: midToNext, control: curr)
+                }
+                // Close to last point with a straight line so we don't drop it.
+                curvePath.addLine(to: points[points.count - 1])
             }
 
             context.stroke(curvePath, with: .color(.white.opacity(0.9)), lineWidth: 3)

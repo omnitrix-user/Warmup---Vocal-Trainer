@@ -28,6 +28,9 @@ final class PitchDetector: ObservableObject {
     // Amplitude floor. Below this RMS, treat as silence.
     private let silenceFloor: Float = 0.01
 
+    private var frequencyHistory: [Double] = []
+    private let medianWindowSize = 5
+
     init(audioEngine: AudioEngine) {
         self.audioEngine = audioEngine
     }
@@ -103,19 +106,49 @@ final class PitchDetector: ObservableObject {
                                                maxFrequency: maxFrequency)
         }
 
+        let estimatedFreq: Double
+        if frequency >= minFrequency && frequency <= maxFrequency {
+            estimatedFreq = frequency
+        } else {
+            estimatedFreq = 0
+        }
+
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             guard !self.isMuted else { return }
             self.amplitude = Double(rms)
-
-            if frequency >= self.minFrequency && frequency <= self.maxFrequency {
-                self.detectedFrequency = frequency
-                self.detectedNote = Self.noteName(forFrequency: frequency)
-            } else {
-                self.detectedFrequency = 0
-                self.detectedNote = "—"
-            }
+            let smoothed = self.smoothedFrequency(rawFrequency: estimatedFreq)
+            self.detectedFrequency = smoothed
+            self.detectedNote = smoothed > 0 ? Self.noteName(forFrequency: smoothed) : "—"
         }
+    }
+
+    /// Returns the median of an array of doubles. Empty array returns 0.
+    private func median(_ values: [Double]) -> Double {
+        guard !values.isEmpty else { return 0 }
+        let sorted = values.sorted()
+        let mid = sorted.count / 2
+        if sorted.count % 2 == 0 {
+            return (sorted[mid - 1] + sorted[mid]) / 2
+        } else {
+            return sorted[mid]
+        }
+    }
+
+    /// Applies a sliding median filter to the raw frequency estimate.
+    /// During silence (raw == 0), buffer is cleared and 0 is returned immediately
+    /// so the curve stops cleanly. During voicing, returns the median of the last N samples,
+    /// which suppresses single-buffer octave errors and noise spikes.
+    private func smoothedFrequency(rawFrequency: Double) -> Double {
+        if rawFrequency == 0 {
+            frequencyHistory.removeAll()
+            return 0
+        }
+        frequencyHistory.append(rawFrequency)
+        if frequencyHistory.count > medianWindowSize {
+            frequencyHistory.removeFirst()
+        }
+        return median(frequencyHistory)
     }
 
     /// RMS amplitude of a buffer. Used as a silence gate before running pitch detection.
