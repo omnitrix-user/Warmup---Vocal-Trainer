@@ -13,6 +13,9 @@ struct ActiveSessionView: View {
     @EnvironmentObject var pitchDetector: PitchDetector
     @Environment(\.dismiss) private var dismiss
 
+    let steps: [SequenceStep]
+    let routineName: String
+
     @State private var pitchHistory: [PitchSnapshot] = []
 
     private enum DemoPattern: Int, CaseIterable {
@@ -50,20 +53,10 @@ struct ActiveSessionView: View {
     // is unaffected — this only swaps the data feeding the display.
     private static let demoCaptureMode: Bool = true
 
-    // Demo sequence — three steps, each with a different target note.
-    // We only have scale_C.wav, so the audio is the same; the target note varies
-    // so the pitch matching UI is exercised. Day 5 replaces this with a real
-    // exercise library.
-    private let demoSequence: [SequenceStep] = [
-        SequenceStep(fileName: "scale_C", targetNote: "C4", exerciseName: "Lip trill"),
-        SequenceStep(fileName: "scale_C", targetNote: "D4", exerciseName: "Lip trill"),
-        SequenceStep(fileName: "scale_C", targetNote: "E4", exerciseName: "Lip trill"),
-    ]
-
     private var currentStep: SequenceStep? {
         guard let idx = sessionPlayer.currentStepIndex,
-              idx < demoSequence.count else { return nil }
-        return demoSequence[idx]
+              idx < steps.count else { return nil }
+        return steps[idx]
     }
 
     private var centsOff: Double {
@@ -241,7 +234,7 @@ struct ActiveSessionView: View {
         }
         .task {
             await pitchDetector.start()
-            sessionPlayer.start(sequence: demoSequence)
+            sessionPlayer.start(sequence: steps)
         }
         .onDisappear {
             sessionPlayer.stop()
@@ -462,7 +455,7 @@ struct ActiveSessionView: View {
             Button {
                 switch sessionPlayer.state {
                 case .idle, .finished:
-                    sessionPlayer.start(sequence: demoSequence)
+                    sessionPlayer.start(sequence: steps)
                 case .paused:
                     sessionPlayer.resume()
                 case .playing, .resting, .countingIn(_):
