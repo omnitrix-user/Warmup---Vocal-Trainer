@@ -15,6 +15,7 @@ final class PitchDetector: ObservableObject {
     @Published private(set) var amplitude: Double = 0
     @Published private(set) var isListening: Bool = false
     @Published private(set) var permissionDenied: Bool = false
+    @Published private(set) var isMuted: Bool = false
 
     private let audioEngine: AudioEngine
     private let bufferSize: AVAudioFrameCount = 2048
@@ -72,6 +73,21 @@ final class PitchDetector: ObservableObject {
         print("[PitchDetector] Stopped")
     }
 
+    /// Temporarily disables pitch reporting without removing the input tap.
+    /// While muted, processSamples discards updates and the published values reset to silence.
+    /// Used to suppress detection during scale playback (avoids speaker → mic feedback loop).
+    func setMuted(_ muted: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isMuted = muted
+            if muted {
+                self.detectedFrequency = 0
+                self.detectedNote = "—"
+                self.amplitude = 0
+            }
+        }
+    }
+
     // MARK: - DSP
 
     private func processSamples(_ samples: [Float], sampleRate: Double) {
@@ -89,6 +105,7 @@ final class PitchDetector: ObservableObject {
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard !self.isMuted else { return }
             self.amplitude = Double(rms)
 
             if frequency >= self.minFrequency && frequency <= self.maxFrequency {

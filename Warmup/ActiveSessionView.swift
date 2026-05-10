@@ -1,11 +1,22 @@
 import SwiftUI
 
+struct PitchSnapshot: Identifiable {
+    let id = UUID()
+    let centsOff: Double
+    let amplitude: Double
+    let isVoiced: Bool
+}
+
 struct ActiveSessionView: View {
     @EnvironmentObject var sessionPlayer: SessionPlayer
     @EnvironmentObject var pitchDetector: PitchDetector
     @Environment(\.dismiss) private var dismiss
 
+    @State private var pitchHistory: [PitchSnapshot] = []
+
     private let amber = Color(red: 0.95, green: 0.7, blue: 0.3)
+    private let maxHistory = 80
+    private let visualizationHeight: CGFloat = 180
 
     // Demo sequence — three steps, each with a different target note.
     // We only have scale_C.wav, so the audio is the same; the target note varies
@@ -42,6 +53,30 @@ struct ActiveSessionView: View {
         return CGFloat(stepDisplayIndex) / CGFloat(sessionPlayer.totalSteps)
     }
 
+    private func appendPitchSnapshot() {
+        let voiced = pitchDetector.detectedFrequency > 0 && pitchDetector.amplitude > 0.005
+        let snap = PitchSnapshot(
+            centsOff: voiced ? centsOff : 0,
+            amplitude: pitchDetector.amplitude,
+            isVoiced: voiced
+        )
+        pitchHistory.append(snap)
+        if pitchHistory.count > maxHistory {
+            pitchHistory.removeFirst(pitchHistory.count - maxHistory)
+        }
+    }
+
+    private func syncMuteForSessionState(_ state: SessionState) {
+        switch state {
+        case .resting:
+            // User's turn — listen to them.
+            pitchDetector.setMuted(false)
+        case .playing, .countingIn, .paused, .idle, .finished:
+            // Audio is playing or session not active — mute detection.
+            pitchDetector.setMuted(true)
+        }
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -54,8 +89,8 @@ struct ActiveSessionView: View {
                 Spacer()
                 targetSection
                 Spacer(minLength: 32)
-                pitchMeter
-                    .padding(.horizontal, 32)
+                pitchCurve
+                    .padding(.horizontal, 24)
                 Spacer(minLength: 32)
                 detectedSection
                 Spacer()
@@ -66,10 +101,17 @@ struct ActiveSessionView: View {
         .task {
             await pitchDetector.start()
             sessionPlayer.start(sequence: demoSequence)
+            syncMuteForSessionState(sessionPlayer.state)
         }
         .onDisappear {
             sessionPlayer.stop()
             pitchDetector.stop()
+        }
+        .onChange(of: pitchDetector.detectedFrequency) { _, _ in
+            appendPitchSnapshot()
+        }
+        .onChange(of: sessionPlayer.state) { _, newState in
+            syncMuteForSessionState(newState)
         }
     }
 
@@ -120,64 +162,81 @@ struct ActiveSessionView: View {
         }
     }
 
-    // MARK: - Pitch meter
+    // MARK: - Pitch curve
 
     @ViewBuilder
-    private var pitchMeter: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(LinearGradient(
-                        colors: [.red.opacity(0.35), .orange.opacity(0.35),
-                                 .green.opacity(0.5),
-                                 .orange.opacity(0.35), .red.opacity(0.35)],
-                        startPoint: .leading,
-                        endPoint: .trailing))
-                    .frame(height: 14)
+    private var pitchCurve: some View {
+        Canvas { context, size in
+            let middleY = size.height / 2
+            let pointSpacing = size.width / CGFloat(maxHistory)
 
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.green.opacity(isInTune ? 0.85 : 0.25))
-                    .frame(width: 56, height: 14)
-                    .shadow(color: .green.opacity(isInTune ? 0.6 : 0), radius: 14)
-                    .animation(.easeInOut(duration: 0.2), value: isInTune)
+            // In-tune zone — soft green band ±20 cents from the target line
+            let zoneHalfHeight = (20.0 / 100.0) * (size.height / 2 - 10)
+            let zoneRect = CGRect(
+                x: 0,
+                y: middleY - CGFloat(zoneHalfHeight),
+                width: size.width,
+                height: CGFloat(zoneHalfHeight * 2)
+            )
+            context.fill(Path(zoneRect), with: .color(.green.opacity(0.08)))
 
-                Circle()
-                    .fill(.white)
-                    .frame(width: 22, height: 22)
-                    .shadow(color: .white.opacity(0.5), radius: 8)
-                    .offset(x: indicatorOffset)
-                    .animation(.spring(response: 0.2, dampingFraction: 0.7), value: indicatorOffset)
+            // Target line — dashed amber, the visual reference
+            var targetLine = Path()
+            targetLine.move(to: CGPoint(x: 0, y: middleY))
+            targetLine.addLine(to: CGPoint(x: size.width, y: middleY))
+            context.stroke(
+                targetLine,
+                with: .color(amber.opacity(0.45)),
+                style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
+            )
+
+            // Pitch curve — the user's recent trajectory
+            guard !pitchHistory.isEmpty else { return }
+
+            var curvePath = Path()
+            var penDown = false
+
+            for (idx, snap) in pitchHistory.enumerated() {
+                let x = CGFloat(idx) * pointSpacing
+                // Negate so positive cents (sharp) goes UP visually
+                let clamped = max(-100, min(100, snap.centsOff))
+                let yOffset = -clamped / 100 * Double(size.height / 2 - 10)
+                let y = middleY + CGFloat(yOffset)
+
+                if !snap.isVoiced {
+                    penDown = false
+                    continue
+                }
+                if !penDown {
+                    curvePath.move(to: CGPoint(x: x, y: y))
+                    penDown = true
+                } else {
+                    curvePath.addLine(to: CGPoint(x: x, y: y))
+                }
             }
-            .frame(height: 24)
 
-            HStack {
-                Text("flat")
-                    .font(.caption2)
-                    .foregroundStyle(Color.white.opacity(0.4))
-                Spacer()
-                Text(isInTune ? "in tune" : centsOffLabel)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(isInTune ? Color.green : Color.white.opacity(0.4))
-                    .animation(.easeInOut(duration: 0.2), value: isInTune)
-                Spacer()
-                Text("sharp")
-                    .font(.caption2)
-                    .foregroundStyle(Color.white.opacity(0.4))
+            context.stroke(curvePath, with: .color(.white.opacity(0.9)), lineWidth: 3)
+
+            // Current pitch dot — glowing indicator at the right edge
+            if let last = pitchHistory.last, last.isVoiced {
+                let clamped = max(-100, min(100, last.centsOff))
+                let yOffset = -clamped / 100 * Double(size.height / 2 - 10)
+                let y = middleY + CGFloat(yOffset)
+                let x = CGFloat(pitchHistory.count - 1) * pointSpacing
+
+                let inTune = abs(last.centsOff) <= 20
+                let dotColor: Color = inTune ? .green : .white
+
+                // Soft glow
+                let glowRect = CGRect(x: x - 14, y: y - 14, width: 28, height: 28)
+                context.fill(Path(ellipseIn: glowRect), with: .color(dotColor.opacity(0.35)))
+
+                // Solid dot
+                let dotRect = CGRect(x: x - 6, y: y - 6, width: 12, height: 12)
+                context.fill(Path(ellipseIn: dotRect), with: .color(dotColor))
             }
         }
-    }
-
-    private var centsOffLabel: String {
-        guard pitchDetector.detectedFrequency > 0 else { return "—" }
-        let rounded = Int(centsOff.rounded())
-        if rounded == 0 { return "in tune" }
-        return rounded > 0 ? "+\(rounded)¢" : "\(rounded)¢"
-    }
-
-    private var indicatorOffset: CGFloat {
-        // Map cents (-100 to +100) to a horizontal offset of about ±130pt.
-        let clamped = max(-100, min(100, centsOff))
-        return CGFloat(clamped) * 1.3
+        .frame(height: visualizationHeight)
     }
 
     // MARK: - Detected note + arrow / check
