@@ -101,4 +101,48 @@ final class AudioEngine: ObservableObject {
         }
         print("[AudioEngine] Playback stopped")
     }
+
+    /// Installs a tap on the mic input node, restarting the engine so the input pipeline
+    /// is properly initialized with a valid format. The handler is invoked from the audio thread
+    /// for each incoming buffer; do NOT do heavy work in it.
+    func installInputTap(bufferSize: AVAudioFrameCount,
+                         handler: @escaping (AVAudioPCMBuffer, Double) -> Void) {
+        let wasRunning = engine.isRunning
+        if wasRunning {
+            engine.stop()
+        }
+
+        let inputNode = engine.inputNode
+        inputNode.removeTap(onBus: 0)
+
+        let format = inputNode.inputFormat(forBus: 0)
+        print("[AudioEngine] Installing input tap. Format sampleRate=\(format.sampleRate), channels=\(format.channelCount)")
+
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            print("[AudioEngine] ERROR: Invalid input format from inputNode. Cannot install tap.")
+            if wasRunning {
+                do { try engine.start() } catch {
+                    print("[AudioEngine] ERROR: Failed to restart engine: \(error.localizedDescription)")
+                }
+            }
+            return
+        }
+
+        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { buffer, _ in
+            handler(buffer, format.sampleRate)
+        }
+
+        do {
+            try engine.start()
+            print("[AudioEngine] Engine restarted with input tap installed")
+        } catch {
+            print("[AudioEngine] ERROR: Failed to restart engine after tap install: \(error.localizedDescription)")
+        }
+    }
+
+    /// Removes the input tap. Safe to call even if no tap is installed.
+    func removeInputTap() {
+        engine.inputNode.removeTap(onBus: 0)
+        print("[AudioEngine] Input tap removed")
+    }
 }

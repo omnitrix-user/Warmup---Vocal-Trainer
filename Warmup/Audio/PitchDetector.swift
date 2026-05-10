@@ -33,45 +33,36 @@ final class PitchDetector: ObservableObject {
 
     func start() async {
         let granted = await AVAudioApplication.requestRecordPermission()
-        await MainActor.run {
-            self.permissionDenied = !granted
+        DispatchQueue.main.async { [weak self] in
+            self?.permissionDenied = !granted
         }
         guard granted else {
             print("[PitchDetector] ERROR: Microphone permission denied")
             return
         }
 
-        let inputNode = audioEngine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
-
-        // Defensive: remove any pre-existing tap (if previous start was never cleanly stopped).
-        inputNode.removeTap(onBus: 0)
-
-        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
+        audioEngine.installInputTap(bufferSize: bufferSize) { [weak self] buffer, sampleRate in
             guard let self else { return }
             guard let channelData = buffer.floatChannelData else { return }
             let frameCount = Int(buffer.frameLength)
             guard frameCount > 0 else { return }
 
-            // Copy samples out of the audio buffer (which doesn't outlive this callback)
-            // and hop to a background queue for the heavy DSP work.
             let samples = Array(UnsafeBufferPointer(start: channelData[0], count: frameCount))
-            let sampleRate = buffer.format.sampleRate
 
             self.processingQueue.async { [weak self] in
                 self?.processSamples(samples, sampleRate: sampleRate)
             }
         }
 
-        await MainActor.run {
-            self.isListening = true
+        DispatchQueue.main.async { [weak self] in
+            self?.isListening = true
         }
-        print("[PitchDetector] Started listening (format: \(format.sampleRate) Hz, \(format.channelCount) ch)")
+        print("[PitchDetector] Started listening")
     }
 
     func stop() {
         guard isListening else { return }
-        audioEngine.inputNode.removeTap(onBus: 0)
+        audioEngine.removeInputTap()
         DispatchQueue.main.async { [weak self] in
             self?.isListening = false
             self?.detectedFrequency = 0
