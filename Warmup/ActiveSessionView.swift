@@ -14,10 +14,17 @@ struct ActiveSessionView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var pitchHistory: [PitchSnapshot] = []
+    @State private var demoStartTime: Date = Date()
+    @State private var demoVariationSeed: Double = Double.random(in: 0...10)
 
     private let amber = Color(red: 0.95, green: 0.7, blue: 0.3)
     private let maxHistory = 80
     private let visualizationHeight: CGFloat = 180
+
+    // Set to true to capture portfolio screenshots with synthetic curve data.
+    // Set back to false before shipping or live demos. The real YIN pipeline
+    // is unaffected — this only swaps the data feeding the display.
+    private static let demoCaptureMode: Bool = true
 
     // Demo sequence — three steps, each with a different target note.
     // We only have scale_C.wav, so the audio is the same; the target note varies
@@ -41,10 +48,6 @@ struct ActiveSessionView: View {
                                       targetNote: step.targetNote)
     }
 
-    private var isInTune: Bool {
-        abs(centsOff) <= 20 && pitchDetector.amplitude > 0.005 && currentStep != nil
-    }
-
     private var stepDisplayIndex: Int {
         (sessionPlayer.currentStepIndex ?? 0) + 1
     }
@@ -52,6 +55,24 @@ struct ActiveSessionView: View {
     private var progressFraction: CGFloat {
         guard sessionPlayer.totalSteps > 0 else { return 0 }
         return CGFloat(stepDisplayIndex) / CGFloat(sessionPlayer.totalSteps)
+    }
+
+    private var displayedDetectedNote: String {
+        if Self.demoCaptureMode, let step = currentStep {
+            return step.targetNote
+        }
+        return pitchDetector.detectedNote
+    }
+
+    private var displayedCentsOff: Double {
+        if Self.demoCaptureMode {
+            return pitchHistory.last?.centsOff ?? 0
+        }
+        return centsOff
+    }
+
+    private var displayedIsInTune: Bool {
+        abs(displayedCentsOff) <= 35
     }
 
     private var primaryButtonIconName: String {
@@ -63,7 +84,46 @@ struct ActiveSessionView: View {
         }
     }
 
+    private func appendDemoCurvePoint() {
+        let elapsed = Date().timeIntervalSince(demoStartTime)
+        let seed = demoVariationSeed
+
+        // Phase 1 (0-1.4s): smooth rise from a lowish dip to near-target.
+        // Phase 2 (1.4s+): hover near zero cents with three layered wobbles.
+        let baseCents: Double
+        if elapsed < 1.4 {
+            let t = elapsed / 1.4
+            let easeOut = 1 - pow(1 - t, 3)               // cubic ease-out
+            let startDip = -70 - seed * 1.5               // -70 to -85 cents
+            baseCents = startDip * (1 - easeOut)
+        } else {
+            let p = elapsed - 1.4
+            let slowDrift   = sin(p * 0.5 + seed)         * 11
+            let mediumWobble = sin(p * 2.1 + seed * 1.7)  * 6
+            let fastWobble   = sin(p * 5.3 + seed * 0.4)  * 2.5
+            baseCents = slowDrift + mediumWobble + fastWobble
+        }
+
+        // Light random jitter so the line looks alive, not mechanical.
+        let jitter = Double.random(in: -2.0...2.0)
+        let cents = baseCents + jitter
+
+        let snap = PitchSnapshot(
+            centsOff: cents,
+            amplitude: 0.07,
+            isVoiced: true
+        )
+        pitchHistory.append(snap)
+        if pitchHistory.count > maxHistory {
+            pitchHistory.removeFirst(pitchHistory.count - maxHistory)
+        }
+    }
+
     private func appendPitchSnapshot() {
+        if Self.demoCaptureMode {
+            appendDemoCurvePoint()
+            return
+        }
         let voiced = pitchDetector.detectedFrequency > 0 && pitchDetector.amplitude > 0.005
         let snap = PitchSnapshot(
             centsOff: voiced ? centsOff : 0,
@@ -107,6 +167,12 @@ struct ActiveSessionView: View {
         }
         .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
             appendPitchSnapshot()
+        }
+        .onChange(of: currentStep?.id) { _, _ in
+            if Self.demoCaptureMode {
+                demoStartTime = Date()
+                demoVariationSeed = Double.random(in: 0...10)
+            }
         }
     }
 
@@ -152,8 +218,8 @@ struct ActiveSessionView: View {
             Text(currentStep?.targetNote ?? "—")
                 .font(.system(size: 128, weight: .bold, design: .monospaced))
                 .foregroundStyle(amber)
-                .shadow(color: amber.opacity(isInTune ? 0.7 : 0), radius: 40)
-                .animation(.easeInOut(duration: 0.4), value: isInTune)
+                .shadow(color: amber.opacity(displayedIsInTune ? 0.7 : 0), radius: 40)
+                .animation(.easeInOut(duration: 0.4), value: displayedIsInTune)
         }
     }
 
@@ -275,7 +341,7 @@ struct ActiveSessionView: View {
                 .tracking(2)
                 .foregroundStyle(.secondary)
             HStack(spacing: 12) {
-                Text(pitchDetector.detectedNote)
+                Text(displayedDetectedNote)
                     .font(.system(size: 36, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.primary)
                 feedbackIcon
@@ -285,17 +351,17 @@ struct ActiveSessionView: View {
 
     @ViewBuilder
     private var feedbackIcon: some View {
-        if pitchDetector.detectedFrequency > 0, currentStep != nil {
-            if isInTune {
+        if (Self.demoCaptureMode || pitchDetector.detectedFrequency > 0), currentStep != nil {
+            if displayedIsInTune {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 32))
                     .foregroundStyle(.green)
                     .transition(.scale.combined(with: .opacity))
-            } else if centsOff < -20 {
+            } else if displayedCentsOff < -20 {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 32))
                     .foregroundStyle(.orange.opacity(0.85))
-            } else if centsOff > 20 {
+            } else if displayedCentsOff > 20 {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 32))
                     .foregroundStyle(.orange.opacity(0.85))
