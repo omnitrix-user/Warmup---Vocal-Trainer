@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RoutinesListView: View {
     @State private var selectedRoutine: Routine?
+    @State private var showingRangeSelector = false
 
     private let amber = Color(red: 0.95, green: 0.7, blue: 0.3)
 
@@ -12,14 +13,24 @@ struct RoutinesListView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     // Header
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Warmup")
-                            .font(.system(size: 44, weight: .semibold, design: .default))
-                            .foregroundStyle(.white)
-
-                        Text("Choose a routine to begin")
-                            .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.55))
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Warmup")
+                                .font(.system(size: 44, weight: .semibold, design: .default))
+                                .foregroundStyle(.white)
+                            Text("Choose a routine to begin")
+                                .font(.system(size: 17, weight: .regular))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                        Spacer()
+                        Button {
+                            showingRangeSelector = true
+                        } label: {
+                            Image(systemName: "person.crop.circle")
+                                .font(.system(size: 32, weight: .regular))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .padding(.top, 6)
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 20)
@@ -44,6 +55,9 @@ struct RoutinesListView: View {
                 steps: routine.steps,
                 routineName: routine.name
             )
+        }
+        .sheet(isPresented: $showingRangeSelector) {
+            RangeSelectorView()
         }
     }
 }
