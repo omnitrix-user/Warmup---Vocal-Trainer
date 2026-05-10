@@ -1,6 +1,6 @@
 import Foundation
 
-struct Routine: Identifiable, Hashable {
+struct Routine: Identifiable {
     let id: UUID
     let name: String
     let briefDescription: String
@@ -24,8 +24,6 @@ struct Routine: Identifiable, Hashable {
         self.steps = steps
     }
 }
-
-extension SequenceStep: Hashable {}
 
 extension Routine {
     /// Built-in warmup routines bundled with the app.
