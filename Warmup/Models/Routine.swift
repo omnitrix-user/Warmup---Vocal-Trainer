@@ -30,7 +30,7 @@ extension Routine {
     static let builtIn: [Routine] = [
         Routine(
             name: "Quick 5",
-            briefDescription: "Morning warmup essentials",
+            briefDescription: "Morning essentials",
             durationMinutes: 5,
             iconName: "bolt.fill",
             steps: [
@@ -50,7 +50,7 @@ extension Routine {
         ),
         Routine(
             name: "Daily 15",
-            briefDescription: "Full-range daily practice",
+            briefDescription: "Daily full-range practice",
             durationMinutes: 15,
             iconName: "sun.max.fill",
             steps: [
@@ -105,7 +105,7 @@ extension Routine {
         ),
         Routine(
             name: "Cool Down 5",
-            briefDescription: "Post-singing recovery",
+            briefDescription: "Vocal recovery",
             durationMinutes: 5,
             iconName: "moon.stars.fill",
             steps: [
