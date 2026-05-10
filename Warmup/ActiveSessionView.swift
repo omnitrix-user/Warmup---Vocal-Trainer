@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct PitchSnapshot: Identifiable {
     let id = UUID()
@@ -53,6 +54,15 @@ struct ActiveSessionView: View {
         return CGFloat(stepDisplayIndex) / CGFloat(sessionPlayer.totalSteps)
     }
 
+    private var primaryButtonIconName: String {
+        switch sessionPlayer.state {
+        case .paused, .idle, .finished:
+            return "play.circle.fill"
+        case .playing, .resting, .countingIn(_):
+            return "pause.circle.fill"
+        }
+    }
+
     private func appendPitchSnapshot() {
         let voiced = pitchDetector.detectedFrequency > 0 && pitchDetector.amplitude > 0.005
         let snap = PitchSnapshot(
@@ -63,17 +73,6 @@ struct ActiveSessionView: View {
         pitchHistory.append(snap)
         if pitchHistory.count > maxHistory {
             pitchHistory.removeFirst(pitchHistory.count - maxHistory)
-        }
-    }
-
-    private func syncMuteForSessionState(_ state: SessionState) {
-        switch state {
-        case .resting:
-            // User's turn — listen to them.
-            pitchDetector.setMuted(false)
-        case .idle, .countingIn(_), .playing, .paused, .finished:
-            // Audio is playing or session not active — mute detection.
-            pitchDetector.setMuted(true)
         }
     }
 
@@ -101,17 +100,13 @@ struct ActiveSessionView: View {
         .task {
             await pitchDetector.start()
             sessionPlayer.start(sequence: demoSequence)
-            syncMuteForSessionState(sessionPlayer.state)
         }
         .onDisappear {
             sessionPlayer.stop()
             pitchDetector.stop()
         }
-        .onChange(of: pitchDetector.detectedFrequency) { _, _ in
+        .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
             appendPitchSnapshot()
-        }
-        .onChange(of: sessionPlayer.state) { _, newState in
-            syncMuteForSessionState(newState)
         }
     }
 
@@ -283,13 +278,16 @@ struct ActiveSessionView: View {
     private var bottomControls: some View {
         HStack(spacing: 32) {
             Button {
-                if sessionPlayer.state == .paused {
+                switch sessionPlayer.state {
+                case .idle, .finished:
+                    sessionPlayer.start(sequence: demoSequence)
+                case .paused:
                     sessionPlayer.resume()
-                } else {
+                case .playing, .resting, .countingIn(_):
                     sessionPlayer.pause()
                 }
             } label: {
-                Image(systemName: sessionPlayer.state == .paused ? "play.circle.fill" : "pause.circle.fill")
+                Image(systemName: primaryButtonIconName)
                     .font(.system(size: 56))
                     .foregroundStyle(amber.opacity(0.85))
             }
