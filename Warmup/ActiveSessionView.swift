@@ -153,16 +153,16 @@ struct ActiveSessionView: View {
             HStack {
                 Text("flat")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Color.white.opacity(0.4))
                 Spacer()
                 Text(isInTune ? "in tune" : centsOffLabel)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(isInTune ? .green : .tertiary)
+                    .foregroundStyle(isInTune ? Color.green : Color.white.opacity(0.4))
                     .animation(.easeInOut(duration: 0.2), value: isInTune)
                 Spacer()
                 Text("sharp")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Color.white.opacity(0.4))
             }
         }
     }
