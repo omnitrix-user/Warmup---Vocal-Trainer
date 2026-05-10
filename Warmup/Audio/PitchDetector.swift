@@ -144,6 +144,41 @@ final class PitchDetector: ObservableObject {
         return sampleRate / Double(bestLag)
     }
 
+    /// Returns cents difference between detected frequency and a target note name.
+    /// 100 cents = 1 semitone.
+    /// Negative = detected is below target (sing higher).
+    /// Positive = detected is above target (sing lower).
+    /// Returns 0 if either input is invalid.
+    static func centsOff(detectedFrequency: Double, targetNote: String) -> Double {
+        guard detectedFrequency > 0,
+              let targetFrequency = frequencyForNote(targetNote) else {
+            return 0
+        }
+        return 1200 * log2(detectedFrequency / targetFrequency)
+    }
+
+    /// Converts a note name like "C4" or "F#5" to its frequency in Hz.
+    /// Returns nil for malformed input.
+    static func frequencyForNote(_ note: String) -> Double? {
+        let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        var nameChars = ""
+        var octaveChars = ""
+        for char in note {
+            if char.isNumber || char == "-" {
+                octaveChars.append(char)
+            } else {
+                nameChars.append(char)
+            }
+        }
+        guard let octave = Int(octaveChars),
+              let noteIndex = noteNames.firstIndex(of: nameChars) else {
+            return nil
+        }
+        // MIDI: C4 = 60, A4 = 69
+        let midi = 12 * (octave + 1) + noteIndex
+        return 440.0 * pow(2.0, Double(midi - 69) / 12.0)
+    }
+
     /// Converts a frequency in Hz to a musical note name like "A4" or "C#5".
     static func noteName(forFrequency frequency: Double) -> String {
         guard frequency > 0 else { return "—" }
