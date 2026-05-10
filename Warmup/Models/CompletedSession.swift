@@ -104,6 +104,23 @@ extension CompletedSession {
             (85,  8, 12, "Quick 5",     "bolt.fill",       5),
             (87,  8, 18, "Daily 15",    "sun.max.fill",    15),
             (89,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            // Multi-session days for heatmap visual variety.
+            // Some days have morning + evening (tier 2), a couple have 3 sessions (tier 3).
+            ( 1, 21, 30, "Cool Down 5", "moon.stars.fill", 5),
+            ( 5, 14, 15, "Quick 5",     "bolt.fill",       5),
+            ( 5, 21, 45, "Cool Down 5", "moon.stars.fill", 5),
+            ( 9, 19, 30, "Pre-Show 8",  "sparkles",        8),
+            (14, 21, 15, "Cool Down 5", "moon.stars.fill", 5),
+            (17, 12, 30, "Quick 5",     "bolt.fill",       5),
+            (17, 21,  0, "Cool Down 5", "moon.stars.fill", 5),
+            (22, 19, 45, "Pre-Show 8",  "sparkles",        8),
+            (33, 21, 30, "Cool Down 5", "moon.stars.fill", 5),
+            (38, 19, 15, "Pre-Show 8",  "sparkles",        8),
+            (50, 21,  0, "Cool Down 5", "moon.stars.fill", 5),
+            (55, 19, 30, "Pre-Show 8",  "sparkles",        8),
+            (62, 21, 45, "Cool Down 5", "moon.stars.fill", 5),
+            (75, 21, 15, "Cool Down 5", "moon.stars.fill", 5),
+            (82, 19, 30, "Pre-Show 8",  "sparkles",        8),
         ]
 
         return specs.compactMap { spec -> CompletedSession? in

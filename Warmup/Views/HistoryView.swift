@@ -189,8 +189,8 @@ private struct ActivityHeatmap: View {
         let count = sessionsByDay[day] ?? 0
         switch count {
         case 0:  return Color.white.opacity(0.06)
-        case 1:  return amber.opacity(0.45)
-        case 2:  return amber.opacity(0.75)
+        case 1:  return amber.opacity(0.55)
+        case 2:  return amber.opacity(0.85)
         default: return amber
         }
     }
@@ -257,8 +257,8 @@ private struct ActivityHeatmap: View {
                         let color: Color = {
                             switch count {
                             case 0:  return Color.white.opacity(0.06)
-                            case 1:  return amber.opacity(0.45)
-                            case 2:  return amber.opacity(0.75)
+                            case 1:  return amber.opacity(0.55)
+                            case 2:  return amber.opacity(0.85)
                             default: return amber
                             }
                         }()
