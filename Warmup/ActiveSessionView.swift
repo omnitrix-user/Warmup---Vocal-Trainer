@@ -71,7 +71,7 @@ struct ActiveSessionView: View {
         case .resting:
             // User's turn — listen to them.
             pitchDetector.setMuted(false)
-        case .playing, .countingIn, .paused, .idle, .finished:
+        case .idle, .countingIn(_), .playing, .paused, .finished:
             // Audio is playing or session not active — mute detection.
             pitchDetector.setMuted(true)
         }
