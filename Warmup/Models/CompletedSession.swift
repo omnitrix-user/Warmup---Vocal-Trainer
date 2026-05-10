@@ -63,6 +63,47 @@ extension CompletedSession {
             (25, 18, 12, "Pre-Show 8",  "sparkles",        8),
             (26, 8, 16, "Daily 15",    "sun.max.fill",    15),
             (27, 8, 22, "Quick 5",     "bolt.fill",       5),
+            // Older history (days 28-89) — populates the heatmap with ~3 months of activity.
+            (28,  8, 18, "Daily 15",    "sun.max.fill",    15),
+            (29,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            (30,  8, 12, "Quick 5",     "bolt.fill",       5),
+            (32,  8, 14, "Daily 15",    "sun.max.fill",    15),
+            (33,  8, 18, "Daily 15",    "sun.max.fill",    15),
+            (34, 18, 30, "Pre-Show 8",  "sparkles",        8),
+            (35,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            (37,  8, 12, "Quick 5",     "bolt.fill",       5),
+            (38,  8, 26, "Daily 15",    "sun.max.fill",    15),
+            (39,  8, 20, "Daily 15",    "sun.max.fill",    15),
+            (40, 22,  0, "Cool Down 5", "moon.stars.fill", 5),
+            (41,  8, 16, "Daily 15",    "sun.max.fill",    15),
+            (42,  7, 50, "Quick 5",     "bolt.fill",       5),
+            (44,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            (45,  8, 18, "Daily 15",    "sun.max.fill",    15),
+            (48,  8, 14, "Daily 15",    "sun.max.fill",    15),
+            (50,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            (51, 19, 30, "Pre-Show 8",  "sparkles",        8),
+            (52,  8, 18, "Daily 15",    "sun.max.fill",    15),
+            (53,  8, 12, "Quick 5",     "bolt.fill",       5),
+            (55,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            (56,  8, 14, "Daily 15",    "sun.max.fill",    15),
+            (58,  8, 18, "Daily 15",    "sun.max.fill",    15),
+            (59,  8, 26, "Daily 15",    "sun.max.fill",    15),
+            (60, 21, 30, "Cool Down 5", "moon.stars.fill", 5),
+            (62,  8, 18, "Daily 15",    "sun.max.fill",    15),
+            (63,  8, 12, "Quick 5",     "bolt.fill",       5),
+            (64,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            (66,  8, 14, "Daily 15",    "sun.max.fill",    15),
+            (67, 18, 45, "Pre-Show 8",  "sparkles",        8),
+            (70,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            (72,  8, 12, "Quick 5",     "bolt.fill",       5),
+            (73,  8, 18, "Daily 15",    "sun.max.fill",    15),
+            (75,  8, 26, "Daily 15",    "sun.max.fill",    15),
+            (78,  8, 14, "Daily 15",    "sun.max.fill",    15),
+            (80, 22,  0, "Cool Down 5", "moon.stars.fill", 5),
+            (82,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            (85,  8, 12, "Quick 5",     "bolt.fill",       5),
+            (87,  8, 18, "Daily 15",    "sun.max.fill",    15),
+            (89,  8, 22, "Daily 15",    "sun.max.fill",    15),
         ]
 
         return specs.compactMap { spec -> CompletedSession? in
@@ -121,6 +162,29 @@ extension CompletedSession {
     /// Total minutes practiced across all seed sessions.
     static var totalMinutes: Int {
         seedData.reduce(0) { $0 + $1.durationMinutes }
+    }
+
+    /// Most-used routine across all sessions, by name.
+    static var mostUsedRoutine: String {
+        let counts = seedData.reduce(into: [String: Int]()) { result, session in
+            result[session.routineName, default: 0] += 1
+        }
+        return counts.max(by: { $0.value < $1.value })?.key ?? "—"
+    }
+
+    /// Number of sessions completed this calendar month.
+    static var thisMonthCount: Int {
+        let cal = Calendar.current
+        guard let monthStart = cal.dateInterval(of: .month, for: Date())?.start else { return 0 }
+        return seedData.filter { $0.completedAt >= monthStart }.count
+    }
+
+    /// Total practice time formatted as "Xh Ym".
+    static var totalDurationDisplay: String {
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours == 0 { return "\(minutes)m" }
+        return "\(hours)h \(minutes)m"
     }
 }
 
