@@ -14,8 +14,32 @@ struct ActiveSessionView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var pitchHistory: [PitchSnapshot] = []
+
+    private enum DemoPattern: Int, CaseIterable {
+        case approachFromBelow   // C-style: rise from flat into target
+        case approachFromAbove   // D-style: descend from sharp into target
+        case overshoot           // E-style: rise past target then settle back
+        case drift               // F-style: slow sweep across both sides
+        case quickLockVibrato    // G-style: snap to target with active vibrato
+    }
+
+    @State private var demoPattern: DemoPattern = .approachFromBelow
     @State private var demoStartTime: Date = Date()
     @State private var demoVariationSeed: Double = Double.random(in: 0...10)
+
+    private func patternForTarget(_ targetNote: String) -> DemoPattern {
+        guard let first = targetNote.first else { return .approachFromBelow }
+        switch first {
+        case "C": return .approachFromBelow
+        case "D": return .approachFromAbove
+        case "E": return .overshoot
+        case "F": return .drift
+        case "G": return .quickLockVibrato
+        case "A": return .overshoot
+        case "B": return .drift
+        default:  return .approachFromBelow
+        }
+    }
 
     private let amber = Color(red: 0.95, green: 0.7, blue: 0.3)
     private let maxHistory = 80
@@ -88,24 +112,82 @@ struct ActiveSessionView: View {
         let elapsed = Date().timeIntervalSince(demoStartTime)
         let seed = demoVariationSeed
 
-        // Phase 1 (0-1.4s): smooth rise from a lowish dip to near-target.
-        // Phase 2 (1.4s+): hover near zero cents with three layered wobbles.
         let baseCents: Double
-        if elapsed < 1.4 {
-            let t = elapsed / 1.4
-            let easeOut = 1 - pow(1 - t, 3)               // cubic ease-out
-            let startDip = -70 - seed * 1.5               // -70 to -85 cents
-            baseCents = startDip * (1 - easeOut)
-        } else {
-            let p = elapsed - 1.4
-            let slowDrift   = sin(p * 0.5 + seed)         * 11
-            let mediumWobble = sin(p * 2.1 + seed * 1.7)  * 6
-            let fastWobble   = sin(p * 5.3 + seed * 0.4)  * 2.5
-            baseCents = slowDrift + mediumWobble + fastWobble
+
+        switch demoPattern {
+        case .approachFromBelow:
+            if elapsed < 1.4 {
+                let t = elapsed / 1.4
+                let easeOut = 1 - pow(1 - t, 3)
+                let startDip = -68 - seed * 1.8           // -68..-86
+                baseCents = startDip * (1 - easeOut)
+            } else {
+                let p = elapsed - 1.4
+                let slow = sin(p * 0.5 + seed) * 11
+                let med  = sin(p * 2.1 + seed * 1.7) * 6
+                let fast = sin(p * 5.3 + seed * 0.4) * 2.5
+                baseCents = slow + med + fast
+            }
+
+        case .approachFromAbove:
+            if elapsed < 1.6 {
+                let t = elapsed / 1.6
+                let easeOut = 1 - pow(1 - t, 2.8)
+                let startSharp = 58 + seed * 1.6          // +58..+74
+                baseCents = startSharp * (1 - easeOut) + 4
+            } else {
+                let p = elapsed - 1.6
+                let drift = sin(p * 0.6 + seed) * 13
+                let wobble = sin(p * 2.8 + seed * 2.1) * 6
+                baseCents = drift + wobble + 2
+            }
+
+        case .overshoot:
+            // Rise from low, shoot past target into sharp, settle back near zero.
+            if elapsed < 0.95 {
+                let t = elapsed / 0.95
+                let smoothed = 1 - pow(1 - t, 2.4)
+                baseCents = -45 + 78 * smoothed           // -45 → +33
+            } else if elapsed < 1.85 {
+                let t = (elapsed - 0.95) / 0.9
+                let smoothed = 1 - pow(1 - t, 2.6)
+                baseCents = 33 - 30 * smoothed             // +33 → +3
+            } else {
+                let p = elapsed - 1.85
+                let drift = sin(p * 1.1 + seed) * 9
+                let detail = sin(p * 3.7 + seed * 1.3) * 4
+                baseCents = drift + detail
+            }
+
+        case .drift:
+            // Slow sweep across both sides — never settles, always moving.
+            let p = elapsed
+            let sweep = sin(p * 0.4 + seed) * 28          // ±28 cent slow sweep
+            let detail = sin(p * 3.2 + seed * 1.5) * 5
+            let micro = sin(p * 7.0 + seed * 0.7) * 2
+            baseCents = sweep + detail + micro
+
+        case .quickLockVibrato:
+            // Snap to target within 0.5s, then pronounced vibrato.
+            if elapsed < 0.5 {
+                let t = elapsed / 0.5
+                baseCents = -22 * (1 - t * t)
+            } else {
+                let p = elapsed - 0.5
+                let vibrato = sin(p * 6.5 + seed) * 9      // ~6.5Hz vibrato
+                let drift = sin(p * 0.7 + seed * 0.3) * 6
+                baseCents = vibrato + drift
+            }
         }
 
-        // Light random jitter so the line looks alive, not mechanical.
-        let jitter = Double.random(in: -2.0...2.0)
+        // Larger jitter than before for more organic feel.
+        var jitter = Double.random(in: -3.5...3.5)
+
+        // Occasional sharp jitter spike (mimics breath catches / vocal artifacts).
+        if Double.random(in: 0...1) < 0.06 {
+            jitter += Double.random(in: -8...8)
+        }
+
         let cents = baseCents + jitter
 
         let snap = PitchSnapshot(
@@ -172,6 +254,9 @@ struct ActiveSessionView: View {
             if Self.demoCaptureMode {
                 demoStartTime = Date()
                 demoVariationSeed = Double.random(in: 0...10)
+                if let target = currentStep?.targetNote {
+                    demoPattern = patternForTarget(target)
+                }
             }
         }
     }
