@@ -1,0 +1,145 @@
+import Foundation
+
+struct CompletedSession: Identifiable {
+    let id: UUID
+    let routineName: String
+    let routineIcon: String
+    let completedAt: Date
+    let durationMinutes: Int
+
+    init(
+        id: UUID = UUID(),
+        routineName: String,
+        routineIcon: String,
+        completedAt: Date,
+        durationMinutes: Int
+    ) {
+        self.id = id
+        self.routineName = routineName
+        self.routineIcon = routineIcon
+        self.completedAt = completedAt
+        self.durationMinutes = durationMinutes
+    }
+}
+
+extension CompletedSession {
+    /// Hardcoded seed data. Generates ~27 sessions over the past ~30 days
+    /// with a current 12-day streak and a 15-day best streak (separated by gaps),
+    /// so the home screen reads as a month of realistic practice.
+    static let seedData: [CompletedSession] = {
+        let cal = Calendar.current
+        let now = Date()
+
+        // (daysAgo, hour, minute, routineName, routineIcon, durationMinutes)
+        let specs: [(Int, Int, Int, String, String, Int)] = [
+            // Current 12-day streak (today, day 1...day 11)
+            (0,  8, 14, "Quick 5",     "bolt.fill",       5),
+            (1,  8, 22, "Daily 15",    "sun.max.fill",    15),
+            (2,  8,  5, "Daily 15",    "sun.max.fill",    15),
+            (3, 19, 32, "Pre-Show 8",  "sparkles",        8),
+            (4,  8, 12, "Quick 5",     "bolt.fill",       5),
+            (5,  8, 30, "Daily 15",    "sun.max.fill",    15),
+            (6, 21, 10, "Cool Down 5", "moon.stars.fill", 5),
+            (7,  8, 20, "Daily 15",    "sun.max.fill",    15),
+            (8,  7, 50, "Quick 5",     "bolt.fill",       5),
+            (9,  8, 28, "Daily 15",    "sun.max.fill",    15),
+            (10, 18, 45, "Pre-Show 8",  "sparkles",        8),
+            (11, 8, 16, "Daily 15",    "sun.max.fill",    15),
+            // GAP at day 12 (ends current streak)
+
+            // Earlier 15-day best streak (days 13-27)
+            (13, 8,  8, "Daily 15",    "sun.max.fill",    15),
+            (14, 8, 14, "Daily 15",    "sun.max.fill",    15),
+            (15, 22, 30, "Cool Down 5", "moon.stars.fill", 5),
+            (16, 8, 12, "Quick 5",     "bolt.fill",       5),
+            (17, 8, 22, "Daily 15",    "sun.max.fill",    15),
+            (18, 19,  5, "Pre-Show 8",  "sparkles",        8),
+            (19, 8, 34, "Daily 15",    "sun.max.fill",    15),
+            (20, 8, 18, "Daily 15",    "sun.max.fill",    15),
+            (21, 7, 55, "Quick 5",     "bolt.fill",       5),
+            (22, 8, 26, "Daily 15",    "sun.max.fill",    15),
+            (23, 21, 40, "Cool Down 5", "moon.stars.fill", 5),
+            (24, 8, 20, "Daily 15",    "sun.max.fill",    15),
+            (25, 18, 12, "Pre-Show 8",  "sparkles",        8),
+            (26, 8, 16, "Daily 15",    "sun.max.fill",    15),
+            (27, 8, 22, "Quick 5",     "bolt.fill",       5),
+        ]
+
+        return specs.compactMap { spec -> CompletedSession? in
+            let (daysAgo, hour, minute, name, icon, duration) = spec
+            guard let dayDate = cal.date(byAdding: .day, value: -daysAgo, to: now) else {
+                return nil
+            }
+            var comps = cal.dateComponents([.year, .month, .day], from: dayDate)
+            comps.hour = hour
+            comps.minute = minute
+            guard let final = cal.date(from: comps) else { return nil }
+            return CompletedSession(
+                routineName: name,
+                routineIcon: icon,
+                completedAt: final,
+                durationMinutes: duration
+            )
+        }
+        .sorted { $0.completedAt > $1.completedAt }
+    }()
+
+    /// Number of consecutive days ending today that contain at least one session.
+    static var currentStreak: Int {
+        let cal = Calendar.current
+        let activeDays = Set(seedData.map { cal.startOfDay(for: $0.completedAt) })
+        var streak = 0
+        var checkDate = cal.startOfDay(for: Date())
+        while activeDays.contains(checkDate) {
+            streak += 1
+            guard let prev = cal.date(byAdding: .day, value: -1, to: checkDate) else { break }
+            checkDate = prev
+        }
+        return streak
+    }
+
+    /// Longest consecutive run of days with at least one session.
+    static var bestStreak: Int {
+        let cal = Calendar.current
+        let uniqueDays = Set(seedData.map { cal.startOfDay(for: $0.completedAt) }).sorted()
+        var maxRun = 0
+        var currentRun = 0
+        var prev: Date? = nil
+        for day in uniqueDays {
+            if let p = prev {
+                let diff = cal.dateComponents([.day], from: p, to: day).day ?? 0
+                currentRun = (diff == 1) ? currentRun + 1 : 1
+            } else {
+                currentRun = 1
+            }
+            maxRun = max(maxRun, currentRun)
+            prev = day
+        }
+        return maxRun
+    }
+
+    /// Total minutes practiced across all seed sessions.
+    static var totalMinutes: Int {
+        seedData.reduce(0) { $0 + $1.durationMinutes }
+    }
+}
+
+extension CompletedSession {
+    /// Friendly relative date like "Today, 8:14 AM" or "3 days ago".
+    var relativeDescription: String {
+        let cal = Calendar.current
+        let now = Date()
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: completedAt), to: cal.startOfDay(for: now)).day ?? 0
+
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "h:mm a"
+        let timeString = timeFormatter.string(from: completedAt)
+
+        switch days {
+        case 0:  return "Today, \(timeString)"
+        case 1:  return "Yesterday, \(timeString)"
+        case 2...6: return "\(days) days ago"
+        default: return "\(days) days ago"
+        }
+    }
+}
